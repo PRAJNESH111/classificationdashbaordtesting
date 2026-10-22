@@ -39,7 +39,7 @@ The detection script creates `.venv` and installs `requirements.txt` on its firs
 - `GET http://localhost:8000/api/status` — current detection state
 - `GET http://localhost:8000/video` — annotated MJPEG stream
 
-The Python service posts status and completed cycle events to the backend. Cycle records are de-duplicated by cycle ID. Report duration statistics include completed cycles only. Timestamps are stored in UTC. Downtime and idle-time are not inferred by this prototype.
+The Python service posts status and completed cycle events to the backend. A cycle completes after five consecutive frames with folded-box confidence at or above the configured threshold. After completion, the tracker requires five consecutive frames containing only `work_area` before it can start another cycle. Cycle records are de-duplicated by cycle ID. Report duration statistics include completed cycles only. Timestamps are stored in UTC. Downtime and idle-time are not inferred by this prototype.
 
 ## Troubleshooting
 
