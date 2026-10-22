@@ -26,7 +26,11 @@ The detection script creates `.venv` and installs `requirements.txt` on its firs
 
 ## Configuration
 
-`detection-service/.env.example` documents the optional local settings. Copy it to `.env` to override `MODEL_PATH`, the comma-separated `VIDEO_PATHS` sequence, `CONFIDENCE_THRESHOLD` (default `0.50`), `FOLDED_CONFIRMATION_THRESHOLD` (default `0.80`), `BACKEND_URL`, or `VIDEO_LOOP` (default `false`). Set `VIDEO_LOOP=true` to repeat the entire sequence. Relative paths resolve from `detection-service`. The frontend URLs are in `frontend/.env.development`.
+`detection-service/.env.example` documents the optional local settings. Copy it to `.env` to override `MODEL_PATH`, the comma-separated `VIDEO_PATHS` sequence, `CONFIDENCE_THRESHOLD` (default `0.50`), `FOLDED_CONFIRMATION_THRESHOLD` (default `0.80`), `FRAME_SKIP` (default `3`, process one frame then skip three), `FOLDED_COMPLETION_GAP_SECONDS` (default `1.0`), `FOLDED_MIN_DETECTIONS` (default `2`), `BACKEND_URL`, or `VIDEO_LOOP` (default `false`). Set `VIDEO_LOOP=true` to repeat the entire sequence. Relative paths resolve from `detection-service`. The frontend URLs are in `frontend/.env.development`.
+
+## NVIDIA GPU inference
+
+The detection service automatically selects CUDA GPU 0 when the installed PyTorch build can access it, and otherwise uses CPU. To use an NVIDIA GPU, install its current NVIDIA driver, stop the detection service, and remove the CPU-only PyTorch packages from its virtual environment with `detection-service\.venv\Scripts\python.exe -m pip uninstall -y torch torchvision torchaudio`. Then select **Windows → Pip → Python → CUDA** at the [official PyTorch install selector](https://pytorch.org/get-started/locally/) and run the generated install command using `detection-service\.venv\Scripts\python.exe -m pip` in place of `pip`. Restart the service and verify `torch.cuda.is_available()` is `True`; `GET http://localhost:8000/health` and the dashboard Settings page show the active inference device. The PyTorch selector chooses a compatible CUDA wheel for its current release and driver requirements.
 
 ## API checks
 
@@ -39,7 +43,7 @@ The detection script creates `.venv` and installs `requirements.txt` on its firs
 - `GET http://localhost:8000/api/status` — current detection state
 - `GET http://localhost:8000/video` — annotated MJPEG stream
 
-The Python service posts status and completed cycle events to the backend. A cycle completes after five consecutive frames with folded-box confidence at or above the configured threshold. After completion, the tracker requires five consecutive frames containing only `work_area` before it can start another cycle. Cycle records are de-duplicated by cycle ID. Report duration statistics include completed cycles only. Timestamps are stored in UTC. Downtime and idle-time are not inferred by this prototype.
+The Python service posts status and completed cycle events to the backend. It processes one frame then skips three by default. A folded-box candidate requires at least two sampled detections at or above the configured threshold. The cycle completes after no further qualifying folded-box detection is seen for the configured gap, and its completion timestamp is the last qualifying folded-box frame. At video end, a qualifying candidate is finalized using that same last-detection timestamp. After completion, the tracker requires five sampled frames containing only `work_area` before it can start another cycle. Cycle records are de-duplicated by cycle ID. Report duration statistics include completed cycles only. Timestamps are stored in UTC. Downtime and idle-time are not inferred by this prototype.
 
 ## Troubleshooting
 

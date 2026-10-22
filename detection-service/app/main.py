@@ -6,12 +6,13 @@ from datetime import datetime, timezone
 
 import cv2
 import httpx
+import torch
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from ultralytics import YOLO
 
-from .config import BACKEND_URL, CONFIDENCE_THRESHOLD, FOLDED_CONFIRMATION_THRESHOLD, MODEL_PATH, VIDEO_LOOP, VIDEO_PATHS
+from .config import BACKEND_URL, CONFIDENCE_THRESHOLD, FOLDED_COMPLETION_GAP_SECONDS, FOLDED_CONFIRMATION_THRESHOLD, FOLDED_MIN_DETECTIONS, FRAME_SKIP, MODEL_PATH, VIDEO_LOOP, VIDEO_PATHS
 from .tracker import ProcessTracker
 
 logging.basicConfig(level=logging.INFO)
@@ -21,11 +22,17 @@ CLASS_NAMES = {0: "work_area", 1: "raw_box", 2: "folded_box", 3: "hand"}
 class Runtime:
     def __init__(self):
         self.model = None
+        self.device = "cpu"
+        self.device_name = "CPU"
         self.cap = None
         self.video_index = 0
         self.lock = asyncio.Lock()
         self.latest = {"state": "unavailable", "detections": [], "updatedAt": None, "activeCycle": None}
-        self.tracker = ProcessTracker(threshold=FOLDED_CONFIRMATION_THRESHOLD)
+        self.tracker = ProcessTracker(
+            threshold=FOLDED_CONFIRMATION_THRESHOLD,
+            completion_gap_seconds=FOLDED_COMPLETION_GAP_SECONDS,
+            min_folded_detections=FOLDED_MIN_DETECTIONS,
+        )
         self.task = None
         self.publisher_task = None
         self.outgoing = asyncio.Queue(maxsize=20)
@@ -57,10 +64,13 @@ class Runtime:
             fps = float(self.cap.get(cv2.CAP_PROP_FPS))
             if not 1 <= fps <= 120:
                 fps = 25.0
-            frame_interval = 1.0 / fps
+            frame_interval = (FRAME_SKIP + 1) / fps
             frame_started = loop.time()
             ok, frame = self.cap.read()
             if not ok:
+                completed = self.tracker.finish()
+                if completed:
+                    await self.outgoing.put(("cycles", completed))
                 next_index = self.video_index + 1
                 if next_index >= len(VIDEO_PATHS) and VIDEO_LOOP:
                     next_index = 0
@@ -70,7 +80,11 @@ class Runtime:
                     self.cap = cv2.VideoCapture(str(VIDEO_PATHS[self.video_index]))
                     if self.cap.isOpened():
                         # A production cycle must not span separate recordings.
-                        self.tracker = ProcessTracker(threshold=FOLDED_CONFIRMATION_THRESHOLD)
+                        self.tracker = ProcessTracker(
+                            threshold=FOLDED_CONFIRMATION_THRESHOLD,
+                            completion_gap_seconds=FOLDED_COMPLETION_GAP_SECONDS,
+                            min_folded_detections=FOLDED_MIN_DETECTIONS,
+                        )
                         log.info("Playing next video (%d/%d): %s", self.video_index + 1, len(VIDEO_PATHS), VIDEO_PATHS[self.video_index].name)
                         await asyncio.sleep(0.01)
                         continue
@@ -85,7 +99,7 @@ class Runtime:
                 log.info("Video processing stopped: %s", runtime.error)
                 return
             try:
-                predictions = await asyncio.to_thread(self.model.predict, frame, conf=CONFIDENCE_THRESHOLD, verbose=False)
+                predictions = await asyncio.to_thread(self.model.predict, frame, conf=CONFIDENCE_THRESHOLD, device=self.device, verbose=False)
                 result = predictions[0]
                 detections = []
                 if result.boxes is not None:
@@ -110,6 +124,9 @@ class Runtime:
                         self.outgoing.put_nowait(("cycles", tracker_update["completedCycle"]))
                     except asyncio.QueueFull:
                         log.error("Publisher queue full; cycle event could not be queued")
+                for _ in range(FRAME_SKIP):
+                    if not self.cap.grab():
+                        break
                 # Keep playback close to the source video's frame rate and give
                 # FastAPI's event loop time to serve health, SignalR and clients.
                 await asyncio.sleep(max(0.0, frame_interval - (loop.time() - frame_started)))
@@ -122,6 +139,13 @@ runtime = Runtime()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if torch.cuda.is_available():
+        runtime.device = 0
+        runtime.device_name = torch.cuda.get_device_name(0)
+    else:
+        runtime.device = "cpu"
+        runtime.device_name = "CPU"
+    log.info("Using inference device: %s", runtime.device_name)
     if not MODEL_PATH.is_file():
         runtime.error = f"Model file not found: {MODEL_PATH}"
         log.error(runtime.error)
@@ -163,12 +187,12 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    return {"service": "detection-service", "modelAvailable": MODEL_PATH.is_file(), "videoAvailable": bool(VIDEO_PATHS) and all(path.is_file() for path in VIDEO_PATHS), "videos": [path.name for path in VIDEO_PATHS], "currentVideo": VIDEO_PATHS[runtime.video_index].name if VIDEO_PATHS and runtime.video_index < len(VIDEO_PATHS) else None, "running": runtime.running, "error": runtime.error}
+    return {"service": "detection-service", "modelAvailable": MODEL_PATH.is_file(), "videoAvailable": bool(VIDEO_PATHS) and all(path.is_file() for path in VIDEO_PATHS), "videos": [path.name for path in VIDEO_PATHS], "currentVideo": VIDEO_PATHS[runtime.video_index].name if VIDEO_PATHS and runtime.video_index < len(VIDEO_PATHS) else None, "inferenceDevice": runtime.device_name, "frameSkip": FRAME_SKIP, "foldedConfirmationThreshold": FOLDED_CONFIRMATION_THRESHOLD, "foldedCompletionGapSeconds": FOLDED_COMPLETION_GAP_SECONDS, "running": runtime.running, "error": runtime.error}
 
 @app.get("/api/status")
 async def status():
     async with runtime.lock:
-        return {k: v for k, v in runtime.latest.items() if k != "frame"} | {"modelAvailable": MODEL_PATH.is_file(), "videoAvailable": bool(VIDEO_PATHS) and all(path.is_file() for path in VIDEO_PATHS), "videos": [path.name for path in VIDEO_PATHS], "error": runtime.error}
+        return {k: v for k, v in runtime.latest.items() if k != "frame"} | {"modelAvailable": MODEL_PATH.is_file(), "videoAvailable": bool(VIDEO_PATHS) and all(path.is_file() for path in VIDEO_PATHS), "videos": [path.name for path in VIDEO_PATHS], "inferenceDevice": runtime.device_name, "frameSkip": FRAME_SKIP, "foldedConfirmationThreshold": FOLDED_CONFIRMATION_THRESHOLD, "foldedCompletionGapSeconds": FOLDED_COMPLETION_GAP_SECONDS, "error": runtime.error}
 
 async def frames():
     while True:
