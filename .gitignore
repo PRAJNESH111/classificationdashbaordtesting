@@ -1,0 +1,26 @@
+# Python
+**/__pycache__/
+**/.pytest_cache/
+**/.venv/
+**/venv/
+*.py[cod]
+
+# Node and build artifacts
+**/node_modules/
+**/dist/
+**/build/
+**/.vite/
+
+# .NET
+**/bin/
+**/obj/
+**/.vs/
+
+# Local configuration and logs
+**/.env
+**/*.log
+
+# Large trained model and video assets
+detection-service/weights/*.pt
+detection-service/videos/*
+!detection-service/videos/.gitkeep
