@@ -22,6 +22,6 @@ VIDEO_PATHS = [
     if value.strip()
 ]
 CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.50"))
-FOLDED_CONFIRMATION_THRESHOLD = float(os.getenv("FOLDED_CONFIRMATION_THRESHOLD", "0.90"))
+FOLDED_CONFIRMATION_THRESHOLD = float(os.getenv("FOLDED_CONFIRMATION_THRESHOLD", "0.80"))
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:5000").rstrip("/")
 VIDEO_LOOP = os.getenv("VIDEO_LOOP", "false").lower() == "true"

@@ -26,7 +26,7 @@ The detection script creates `.venv` and installs `requirements.txt` on its firs
 
 ## Configuration
 
-`detection-service/.env.example` documents the optional local settings. Copy it to `.env` to override `MODEL_PATH`, the comma-separated `VIDEO_PATHS` sequence, `CONFIDENCE_THRESHOLD` (default `0.50`), `FOLDED_CONFIRMATION_THRESHOLD` (default `0.90`), `BACKEND_URL`, or `VIDEO_LOOP` (default `false`). Set `VIDEO_LOOP=true` to repeat the entire sequence. Relative paths resolve from `detection-service`. The frontend URLs are in `frontend/.env.development`.
+`detection-service/.env.example` documents the optional local settings. Copy it to `.env` to override `MODEL_PATH`, the comma-separated `VIDEO_PATHS` sequence, `CONFIDENCE_THRESHOLD` (default `0.50`), `FOLDED_CONFIRMATION_THRESHOLD` (default `0.80`), `BACKEND_URL`, or `VIDEO_LOOP` (default `false`). Set `VIDEO_LOOP=true` to repeat the entire sequence. Relative paths resolve from `detection-service`. The frontend URLs are in `frontend/.env.development`.
 
 ## API checks
 

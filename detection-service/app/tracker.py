@@ -4,7 +4,7 @@ from uuid import uuid4
 class ProcessTracker:
     """A cycle starts when work area, raw box and hand are visible, and ends
     after folded_box remains above the confirmation confidence for 5 frames."""
-    def __init__(self, confirm_frames: int = 5, threshold: float = 0.90):
+    def __init__(self, confirm_frames: int = 5, threshold: float = 0.80):
         self.confirm_frames = confirm_frames
         self.threshold = threshold
         self.active = None
