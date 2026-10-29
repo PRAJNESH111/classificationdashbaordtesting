@@ -4,7 +4,7 @@ Local prototype using the existing YOLO model, a Python inference service, an AS
 
 ## Model and video
 
-The model is at `detection-service/weights/best.pt`. The detection service processes `vid1.mp4`, `vid2.mp4`, then `vid3.mp4` from `detection-service/videos/` in order, and stops after the last clip by default. Preserve the model's original class IDs: `work_area`, `raw_box`, `folded_box`, and `hand`.
+The model is at `detection-service/weights/best.pt`. The detection service processes `vid1.mp4`, `vid2.mp4`, then `vid3.mp4` from `detection-service/videos/` in order, and stops after the last clip by default. The model class IDs are `0 workarea`, `1 stage0`, `2 stage1`, `3 stage2`, `4 hand`, and `5 idlehand`.
 
 ## Prerequisites
 
@@ -26,7 +26,7 @@ The detection script creates `.venv` and installs `requirements.txt` on its firs
 
 ## Configuration
 
-`detection-service/.env.example` documents the optional local settings. Copy it to `.env` to override `MODEL_PATH`, the comma-separated `VIDEO_PATHS` sequence, `CONFIDENCE_THRESHOLD` (default `0.50`), `FOLDED_CONFIRMATION_THRESHOLD` (default `0.80`), `FRAME_SKIP` (default `3`, process one frame then skip three), `FOLDED_COMPLETION_GAP_SECONDS` (default `1.0`), `FOLDED_MIN_DETECTIONS` (default `2`), `BACKEND_URL`, or `VIDEO_LOOP` (default `false`). Set `VIDEO_LOOP=true` to repeat the entire sequence. Relative paths resolve from `detection-service`. The frontend URLs are in `frontend/.env.development`.
+`detection-service/.env.example` documents the optional local settings. Copy it to `.env` to override `MODEL_PATH`, the comma-separated `VIDEO_PATHS` sequence, `CONFIDENCE_THRESHOLD` (default `0.50`), `STAGE_CONFIDENCE_THRESHOLD` (default `0.80`), `STAGE_CONFIRMATION_DETECTIONS` (default `2`), `STAGE2_COMPLETION_GAP_SECONDS` (default `1.0`), `RESET_CONFIRM_FRAMES` (default `5`), `FRAME_SKIP` (default `3`, process one frame then skip three), `BACKEND_URL`, or `VIDEO_LOOP` (default `false`). Set `VIDEO_LOOP=true` to repeat the entire sequence. Relative paths resolve from `detection-service`. The frontend URLs are in `frontend/.env.development`.
 
 ## NVIDIA GPU inference
 
@@ -43,7 +43,7 @@ The detection service automatically selects CUDA GPU 0 when the installed PyTorc
 - `GET http://localhost:8000/api/status` — current detection state
 - `GET http://localhost:8000/video` — annotated MJPEG stream
 
-The Python service posts status and completed cycle events to the backend. It processes one frame then skips three by default. A folded-box candidate requires at least two sampled detections at or above the configured threshold. The cycle completes after no further qualifying folded-box detection is seen for the configured gap, and its completion timestamp is the last qualifying folded-box frame. At video end, a qualifying candidate is finalized using that same last-detection timestamp. After completion, the tracker requires five sampled frames containing only `work_area` before it can start another cycle. Cycle records are de-duplicated by cycle ID. Report duration statistics include completed cycles only. Timestamps are stored in UTC. Downtime and idle-time are not inferred by this prototype.
+The Python service posts live stage status and completed cycle events to the backend. It processes one frame then skips three by default. A cycle starts after `workarea` and `stage0` are confirmed in two sampled frames. It advances in order through `stage0`, `stage1`, then `stage2`; each transition timestamp and confidence is saved in `stageTimeline`. A cycle completes only after stage2 is confirmed and no further stage2 detection is seen for the configured gap. The completion time is the last stage2 detection time; the cycle also stores total duration and per-stage durations. A confirmed stage2 is finalized at its last detection time when a clip ends. After completion, the tracker requires five sampled frames containing only `workarea` before it rearms. `hand` and `idlehand` are reported as operator states and do not start or complete cycles. Cycle records are de-duplicated by cycle ID. Report duration statistics include completed cycles only. Timestamps are stored in UTC. Downtime and idle-time are not inferred by this prototype.
 
 ## Troubleshooting
 
@@ -64,4 +64,4 @@ The Python service posts status and completed cycle events to the backend. It pr
 
 ## Prototype limits
 
-Data is in memory and resets when the backend restarts. The cycle tracker starts when work area, raw box and hand appear together, then confirms folded-box confidence for five frames. Validate this rule against the actual line footage before relying on cycle counts. The video is a single shared inference source; multiple browsers do not run separate inference.
+Data is in memory and resets when the backend restarts. The stage tracker requires the ordered `stage0` → `stage1` → `stage2` sequence with confidence confirmation. `stage2` is finalized after its detections stop, while its event time remains the last detected stage2 frame. Validate the stage order and confirmation settings against the actual line footage before relying on cycle counts. The video is a single shared inference source; multiple browsers do not run separate inference.
