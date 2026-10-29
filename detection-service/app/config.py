@@ -17,7 +17,7 @@ VIDEO_PATHS = [
     resolve_path(value.strip())
     for value in os.getenv(
         "VIDEO_PATHS",
-        "videos/vid1.mp4,videos/vid2.mp4,videos/vid3.mp4",
+        "videos/vid1.mp4,videos/vid2.mp4,videos/vid3.mp4,videos/vid4.mp4,videos/vid5.mp4",
     ).split(",")
     if value.strip()
 ]
@@ -28,6 +28,6 @@ STAGE_CONFIDENCE_THRESHOLD = float(
 STAGE_CONFIRMATION_DETECTIONS = max(1, int(os.getenv("STAGE_CONFIRMATION_DETECTIONS", "2")))
 STAGE2_COMPLETION_GAP_SECONDS = max(0.1, float(os.getenv("STAGE2_COMPLETION_GAP_SECONDS", "1.0")))
 RESET_CONFIRM_FRAMES = max(1, int(os.getenv("RESET_CONFIRM_FRAMES", "5")))
-FRAME_SKIP = max(0, int(os.getenv("FRAME_SKIP", "3")))
+FRAME_SKIP = max(0, int(os.getenv("FRAME_SKIP", "0")))
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:5000").rstrip("/")
 VIDEO_LOOP = os.getenv("VIDEO_LOOP", "false").lower() == "true"
