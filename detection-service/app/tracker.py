@@ -132,8 +132,8 @@ class ProcessTracker:
             by_name[name] = max(by_name.get(name, 0.0), detection["confidence"])
 
         operator_state = (
-            "active" if by_name.get("hand", 0.0) >= self.threshold
-            else "idle" if by_name.get("idlehand", 0.0) >= self.threshold
+            "idle" if by_name.get("idlehand", 0.0) >= self.threshold
+            else "active" if by_name.get("hand", 0.0) >= self.threshold
             else "unknown"
         )
 

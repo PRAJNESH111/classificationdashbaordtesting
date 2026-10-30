@@ -11,10 +11,9 @@ export default function LiveFloorPage() {
   const activeCycle = status.activeCycle
   const activeStage = activeCycle?.currentStage
   const stageIndex = STAGES.indexOf(activeStage)
-  const sourceVideo = status.videoName || activeCycle?.sourceVideo
-  const target = activeStage ? stageTarget(stageMetrics, sourceVideo, activeStage) : null
+  const target = activeStage ? stageTarget(stageMetrics, activeStage) : null
   const elapsed = calculateStageElapsedSeconds(activeCycle, status.updatedAt, clock.getTime())
-  const estimate = calculateRemainingEstimate(activeCycle, stageMetrics, sourceVideo, elapsed)
+  const estimate = calculateRemainingEstimate(activeCycle, stageMetrics, elapsed)
   const overrun = calculateStageOverrun(target, elapsed)
   const progress = calculateStageProgress(target, elapsed)
   const completedToday = new Set(cycles.filter(cycle => cycle.cycleId && sameLocalDay(cycle.completedAt, clock)).map(cycle => cycle.cycleId)).size

@@ -106,11 +106,14 @@ export function ingestCompletedCycles(store, cycles) {
   return { metrics: next, changed }
 }
 
-export function stageTarget(metrics, sourceVideo, stage) {
-  // Prefer the selected video's historical mean; use the all-video mean only as a fallback.
-  const videoEntry = sourceVideo ? metrics.videos?.[sourceVideo]?.[stage] : null
-  if (videoEntry?.count > 0 && Number.isFinite(videoEntry.totalSeconds / videoEntry.count)) {
-    return { seconds: videoEntry.totalSeconds / videoEntry.count, count: videoEntry.count, source: 'video' }
+export function stageTarget(metrics, stage) {
+  // Average each video's cycle mean equally, so a video with more cycles cannot dominate the baseline.
+  const videoMeans = Object.values(metrics.videos || {})
+    .map(video => video?.[stage])
+    .filter(entry => entry?.count > 0 && Number.isFinite(entry.totalSeconds / entry.count))
+    .map(entry => entry.totalSeconds / entry.count)
+  if (videoMeans.length) {
+    return { seconds: videoMeans.reduce((sum, value) => sum + value, 0) / videoMeans.length, count: videoMeans.length, source: 'videos' }
   }
   const overall = metrics.overall?.[stage]
   if (overall?.count > 0 && Number.isFinite(overall.totalSeconds / overall.count)) {
@@ -131,11 +134,11 @@ export function calculateStageElapsedSeconds(cycle, updatedAt, nowMs) {
   return Number.isFinite(enteredTime) ? Math.max(0, (nowMs - enteredTime) / 1000) : Number.isFinite(trackerElapsed) ? Math.max(0, trackerElapsed) : null
 }
 
-export function calculateRemainingEstimate(cycle, metrics, sourceVideo, elapsedSeconds) {
+export function calculateRemainingEstimate(cycle, metrics, elapsedSeconds) {
   if (!cycle || elapsedSeconds == null) return null
   const currentIndex = STAGES.indexOf(cycle.currentStage)
   if (currentIndex < 0) return null
-  const targets = STAGES.slice(currentIndex).map(stage => stageTarget(metrics, sourceVideo || cycle.sourceVideo, stage))
+  const targets = STAGES.slice(currentIndex).map(stage => stageTarget(metrics, stage))
   if (targets.some(target => !target)) return null
   return targets.reduce((sum, target, offset) => sum + (offset === 0 ? Math.max(0, target.seconds - elapsedSeconds) : target.seconds), 0)
 }
@@ -155,7 +158,7 @@ export function averageStageVariance(cycles, metrics) {
   for (const cycle of cycles || []) {
     const durations = stageDurationsForCycle(cycle)
     for (const stage of STAGES) {
-      const target = stageTarget(metrics, cycle.sourceVideo, stage)
+      const target = stageTarget(metrics, stage)
       const observed = durations[stage]
       if (target && Number.isFinite(observed) && target.seconds > 0) samples.push((observed - target.seconds) / target.seconds * 100)
     }

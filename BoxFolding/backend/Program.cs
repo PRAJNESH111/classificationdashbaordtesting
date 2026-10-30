@@ -52,10 +52,11 @@ app.MapGet("/api/reports/summary", (MonitorStore store, DateTimeOffset? from, Da
     var end = (to ?? DateTimeOffset.UtcNow).ToUniversalTime();
     var rows = store.Cycles.Where(c => c.CompletedAt >= start && c.CompletedAt <= end).ToArray();
     var durations = rows.Select(c => c.DurationSeconds).ToArray();
+    var cyclesByVideo = rows.GroupBy(c => string.IsNullOrWhiteSpace(c.SourceVideo) ? "(unknown video)" : c.SourceVideo);
     var averageStageDurations = rows.Length > 0 ? new {
-        stage0 = rows.Average(c => c.StageDurationsSeconds["stage0"]),
-        stage1 = rows.Average(c => c.StageDurationsSeconds["stage1"]),
-        stage2 = rows.Average(c => c.StageDurationsSeconds["stage2"])
+        stage0 = cyclesByVideo.Average(video => video.Average(c => c.StageDurationsSeconds["stage0"])),
+        stage1 = cyclesByVideo.Average(video => video.Average(c => c.StageDurationsSeconds["stage1"])),
+        stage2 = cyclesByVideo.Average(video => video.Average(c => c.StageDurationsSeconds["stage2"]))
     } : null;
     var hourly = rows.GroupBy(c => c.CompletedAt.UtcDateTime.ToString("yyyy-MM-dd HH:00"))
         .OrderBy(g => g.Key).Select(g => new { hour = g.Key, count = g.Count() }).ToArray();
