@@ -1,4 +1,11 @@
 import { Navigate, NavLink, Outlet, Route, Routes } from 'react-router-dom'
+/* React-Toastify imports are kept commented so notifications can be re-enabled later.
+import { useEffect, useRef } from 'react'
+import { ToastContainer, toast } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
+import { calculateStageElapsedSeconds, calculateStageOverrun, stageTarget } from './utils/productionMetrics'
+import { shortDuration, STAGE_LABELS } from './utils/productionFormatters'
+*/
 import { ProductionProvider } from './context/ProductionContext'
 import { useProduction } from './context/useProduction'
 import { StatusPill } from './components/ProductionPanels'
@@ -20,6 +27,7 @@ function SupervisorLayout() {
   const connectionTone = connection === 'connected' ? 'green' : connection === 'reconnecting' ? 'amber' : connection === 'connecting' ? 'gray' : 'red'
 
   return <div className="flex h-dvh w-full flex-col overflow-hidden bg-slate-100 text-slate-900">
+    {/* React-Toastify is disabled for now. */}
     <header className="border-b border-indigo-950 bg-indigo-950 text-white shadow-sm">
       <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="flex min-h-20 flex-wrap items-center justify-between gap-3 py-3">
@@ -42,6 +50,7 @@ function SupervisorLayout() {
           <nav aria-label="Live monitoring tabs" className="order-1 ml-auto flex w-fit items-center rounded-lg border border-indigo-700 bg-indigo-900/80 p-1 sm:order-2">
             <NavLink end to="/" className={({ isActive }) => `rounded-md px-4 py-1.5 text-[11px] font-bold transition sm:px-5 ${isActive ? 'bg-white text-indigo-950 shadow-sm' : 'text-indigo-200 hover:text-white'}`}>Live floor</NavLink>
             <NavLink to="/live-feed" className={({ isActive }) => `rounded-md px-4 py-1.5 text-[11px] font-bold transition sm:px-5 ${isActive ? 'bg-white text-indigo-950 shadow-sm' : 'text-indigo-200 hover:text-white'}`}>Live feed</NavLink>
+            <NavLink to="/live-feed-1" className={({ isActive }) => `rounded-md px-4 py-1.5 text-[11px] font-bold transition sm:px-5 ${isActive ? 'bg-white text-indigo-950 shadow-sm' : 'text-indigo-200 hover:text-white'}`}>Live feed 1</NavLink>
           </nav>
         </div>
       </div>
@@ -57,11 +66,53 @@ function SupervisorLayout() {
   </div>
 }
 
+/* React-Toastify notifications are disabled for now.
+function ProductionNotifications() {
+  const { alerts, status, stageMetrics, clock } = useProduction()
+  const seenAlerts = useRef(null)
+  const notifiedOverruns = useRef(new Set())
+  const cycle = status.activeCycle
+  const stage = cycle?.currentStage
+  const elapsed = calculateStageElapsedSeconds(cycle, status.updatedAt, clock.getTime())
+  const target = stage ? stageTarget(stageMetrics, stage) : null
+  const overrun = calculateStageOverrun(target, elapsed)
+
+  useEffect(() => {
+    if (seenAlerts.current === null) {
+      seenAlerts.current = new Set(alerts.map(alert => alert.id))
+      return
+    }
+
+    for (const alert of alerts) {
+      if (seenAlerts.current.has(alert.id)) continue
+      seenAlerts.current.add(alert.id)
+      if (alert.type === 'idle') {
+        toast.error(alert.title, { toastId: 'operator-idle-alert' })
+      }
+    }
+  }, [alerts])
+
+  useEffect(() => {
+    if (!cycle || !stage || overrun <= 0) return
+    const cycleKey = cycle.cycleId || cycle.startedAt
+    const notificationId = `${cycleKey}:${stage}`
+    if (notifiedOverruns.current.has(notificationId)) return
+    notifiedOverruns.current.add(notificationId)
+    toast.warning(`${STAGE_LABELS[stage] || stage} is over target by ${shortDuration(overrun)}`, {
+      toastId: `stage-overrun:${notificationId}`,
+    })
+  }, [cycle, stage, overrun])
+
+  return null
+}
+*/
+
 export default function App() {
   return <ProductionProvider><Routes>
     <Route element={<SupervisorLayout/>}>
       <Route index element={<LiveFloorPage/>}/>
       <Route path="live-feed" element={<LiveFeedPage/>}/>
+      <Route path="live-feed-1" element={<LiveFeedPage showAllStages/>}/>
       <Route path="production" element={<ReportsPage productionView/>}/>
       <Route path="reports" element={<ReportsPage/>}/>
       <Route path="cycles" element={<CycleHistoryPage/>}/>

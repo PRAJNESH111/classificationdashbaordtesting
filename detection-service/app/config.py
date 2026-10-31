@@ -17,7 +17,7 @@ VIDEO_PATHS = [
     resolve_path(value.strip())
     for value in os.getenv(
         "VIDEO_PATHS",
-        "videos/vid1.mp4,videos/vid2.mp4,videos/vid3.mp4,videos/vid4.mp4,videos/vid5.mp4",
+        "videos/vid1.mp4,videos/vid2.mp4,videos/vid4.mp4,videos/vid5.mp4",
     ).split(",")
     if value.strip()
 ]

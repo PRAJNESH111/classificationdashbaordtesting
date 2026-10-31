@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { STAGES } from '../utils/productionMetrics'
+import { STAGES, stageDurationsForCycle } from '../utils/productionMetrics'
 import { duration, formatTimestamp, shortDuration, STAGE_LABELS } from '../utils/productionFormatters'
 
 export function Panel({ title, subtitle, action, children, className = '', compact = false }) {
@@ -22,43 +22,51 @@ export function SummaryCard({ label, value, detail, icon, tone = 'slate', compac
   </article>
 }
 
-export function ProcessTimeline({ status, operating, clock, elapsedSeconds, target, overrunSeconds, progress, compact = false }) {
+export function ProcessTimeline({ status, operating, clock, elapsedSeconds, target, overrunSeconds, progress, compact = false, horizontalStages = false, showAllStages = false }) {
   const cycle = status.activeCycle
   const timelineCycle = cycle || status.lastCompletedCycle
   const events = timelineCycle?.stageTimeline || []
+  const recordedStageTimes = stageDurationsForCycle(timelineCycle)
   const currentIndex = STAGES.indexOf(cycle?.currentStage || status.currentStage)
   const currentStartedAt = cycle?.stageTimeline?.find(event => event.stage === cycle.currentStage)?.enteredAt
   const idle = operating.known && operating.label === 'IDLE'
+  const startedStages = new Set(events.map(event => event.stage))
+  // During a live cycle, render cards only after the stage has an entry in the
+  // timeline. The active stage is a fallback for older status payloads that
+  // provide currentStage without a stageTimeline entry.
+  if (cycle?.currentStage) startedStages.add(cycle.currentStage)
+  const visibleStages = showAllStages ? STAGES : STAGES.filter(stage => startedStages.has(stage))
+  const stageCards = visibleStages.map(stage => {
+    const index = STAGES.indexOf(stage)
+    const event = events.find(item => item.stage === stage)
+    const state = !cycle ? 'WAITING' : index < currentIndex ? 'COMPLETED' : index === currentIndex ? 'ACTIVE' : 'WAITING'
+    const isIdle = Boolean(cycle && status.operatorState === 'idle' && index === currentIndex)
+    const seconds = cycle && index === currentIndex ? elapsedSeconds : recordedStageTimes[stage]
+    const timeLabel = seconds == null
+      ? null
+      : cycle && state === 'ACTIVE' ? `Elapsed ${duration(seconds)}`
+        : cycle && state === 'COMPLETED' ? `Taken ${duration(seconds)}`
+          : `Last cycle ${duration(seconds)}`
+    return { stage, index, event, state, isIdle, timeLabel }
+  })
 
-  return <Panel compact={compact} title="BAY 1 — BOX FOLDING"  className={`min-h-0 ${compact ? 'xl:overflow-hidden' : ''} border-t-4 ${idle ? 'border-t-red-500' : operating.tone === 'green' ? 'border-t-emerald-600' : 'border-t-slate-300'}`} action={<div className="flex items-center gap-3"><StatusPill tone={operating.tone}>{operating.label}</StatusPill>{status.updatedAt && <span className="hidden text-xs text-slate-500 sm:inline">Updated {Math.max(0, Math.floor((clock.getTime() - new Date(status.updatedAt).getTime()) / 1000))}s ago</span>}</div>}>
+  return <Panel compact={compact} title="BAY 1 — BOX FOLDING"  className={`min-h-0 ${compact ? 'xl:overflow-hidden' : ''} border-t-4 ${idle ? 'border-t-red-500' : operating.tone === 'green' ? 'border-t-emerald-600' : 'border-t-slate-300'}`} action={status.updatedAt ? <span className="hidden text-xs text-slate-500 sm:inline">Updated {Math.max(0, Math.floor((clock.getTime() - new Date(status.updatedAt).getTime()) / 1000))}s ago</span> : null}>
     <div className={compact ? 'space-y-1.5 p-2' : 'space-y-3 p-4 sm:p-5'}>
-      <div aria-live="polite" className={`flex min-h-6 items-center rounded-md border px-2 py-1 text-[10px] ${status.awaitingReset ? 'border-amber-200 bg-amber-50 font-medium text-amber-900' : idle && status.operatorState === 'idle' ? 'border-red-200 bg-red-50 font-medium text-red-800' : 'invisible border-transparent'}`}>
-        {status.awaitingReset ? 'Cycle complete · waiting for work-area reset' : idle && status.operatorState === 'idle' ? 'No active hand movement detected.' : 'No current operating notice'}
-      </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" aria-label={`Process stages, current state ${operating.label}`}>
-        {STAGES.map((stage, index) => {
-          const event = events.find(item => item.stage === stage)
-          const state = !cycle ? 'WAITING' : index < currentIndex ? 'COMPLETED' : index === currentIndex ? 'ACTIVE' : 'WAITING'
-          const stageIdle = Boolean(cycle && idle && status.operatorState === 'idle' && index === currentIndex)
-          const actualElapsed = cycle ? (index === currentIndex ? elapsedSeconds : cycle.stageDurationsSeconds?.[stage]) : timelineCycle?.stageDurationsSeconds?.[stage]
-          const frameTone = stageIdle ? 'border-red-200 bg-red-50' : state === 'COMPLETED' ? 'border-emerald-200 bg-emerald-50' : state === 'ACTIVE' && overrunSeconds > 0 ? 'border-red-200 bg-red-50' : state === 'ACTIVE' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50'
-          const markerTone = stageIdle ? 'bg-red-100 text-red-800 ring-red-200' : state === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800 ring-emerald-200' : state === 'ACTIVE' && overrunSeconds > 0 ? 'bg-red-500 text-white ring-red-200' : state === 'ACTIVE' ? 'bg-amber-400 text-amber-950 ring-amber-200' : 'bg-white text-slate-500 ring-slate-200'
-          const stateTone = stageIdle ? 'text-red-700' : state === 'COMPLETED' ? 'text-emerald-700' : state === 'ACTIVE' && overrunSeconds > 0 ? 'text-red-700' : state === 'ACTIVE' ? 'text-amber-800' : 'text-slate-400'
-          return <article key={stage} className={`relative ${compact ? 'min-h-0 p-1.5' : 'min-h-32 p-3 sm:p-4'} rounded-lg border ${frameTone}`}>
-            <div className="flex items-center justify-between gap-2"><span className={`grid shrink-0 place-items-center rounded-full text-xs font-bold ring-2 ${compact ? 'size-5' : 'size-8 text-sm'} ${markerTone}`}>{index + 1}</span><span className={`text-[9px] font-bold tracking-widest ${stateTone}`}>{state}</span></div>
-            <h3 className={`${compact ? 'mt-0.5 text-[11px]' : 'mt-3 text-sm'} font-bold text-slate-800`}>{STAGE_LABELS[stage]}</h3>
-            <p className={`${compact ? 'text-[9px]' : 'text-[11px]'} truncate text-slate-500`}>{event ? `${cycle ? '' : 'Last: '}${new Date(event.enteredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'No stage time recorded'}</p>
-            {actualElapsed != null && <p className="text-[10px] font-medium text-slate-600">{cycle && state === 'ACTIVE' ? `Elapsed ${duration(actualElapsed)}` : `${cycle ? '' : 'Last: '}${duration(actualElapsed)}`}</p>}
-          </article>
-        })}
+      {status.awaitingReset && <div aria-live="polite" className="flex min-h-6 items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-900">
+        Cycle complete · waiting for work-area reset
+      </div>}
+      <div className={`grid ${horizontalStages ? 'grid-cols-3' : 'grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))]'} gap-2`} aria-label={`Process stages, current state ${operating.label}`}>
+        {stageCards.length
+          ? stageCards.map(stageCard => <StageCard key={stageCard.stage} {...stageCard} compact={compact || horizontalStages} cycleActive={Boolean(cycle)} overrun={overrunSeconds}/>)
+          : <p className="col-span-full rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">Stage cards will appear as each stage starts.</p>}
       </div>
 
       <div className={`grid grid-cols-2 ${compact ? 'gap-2' : 'gap-3'} lg:grid-cols-4`}>
         <StageDetail compact={compact} label="STEP STARTED" value={currentStartedAt ? new Date(currentStartedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}/>
-        <StageDetail compact={compact} label="TARGET STAGE" value={target ? `${shortDuration(target.seconds)} · ${target.source === 'video' ? 'video' : 'overall'}` : 'Learning baseline'}/>
+        <StageDetail compact={compact} label="TARGET TIME" value={target ? shortDuration(target.seconds) : 'Waiting for data'}/>
         <StageDetail compact={compact} label="OVERRUN" value={overrunSeconds == null ? '—' : overrunSeconds > 0 ? `+${shortDuration(overrunSeconds)}` : 'Within target'} tone={overrunSeconds > 0 ? 'red' : 'slate'}/>
         <div className={`flex min-w-0 flex-col justify-center rounded-lg bg-slate-100 px-3 ${compact ? 'gap-1 py-1.5' : 'gap-2 py-2.5'}`}>
-          <div className="flex justify-between gap-2 text-[10px] font-semibold text-slate-500"><span>STAGE PROGRESS</span><b className="text-slate-700">{progress == null ? 'Learning baseline' : `${Math.round(progress)}%`}</b></div>
+          <div className="flex min-w-0 justify-between gap-2 text-[10px] font-semibold text-slate-500"><span>STEP PROGRESS (OVER TARGET)</span><b className="truncate text-[11px] text-slate-700">{progress == null ? 'Waiting' : `${Math.round(progress)}%`}</b></div>
           <div className="h-2 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full transition-[width] duration-300 ${overrunSeconds > 0 ? 'bg-red-500' : 'bg-amber-400'}`} style={{ width: `${progress ?? 0}%` }}/></div>
         </div>
       </div>
@@ -66,6 +74,22 @@ export function ProcessTimeline({ status, operating, clock, elapsedSeconds, targ
       {!compact && !cycle && status.lastCompletedCycle && <p className="border-t border-slate-100 pt-3 text-xs text-slate-500">Last completed cycle <b className="ml-1 text-slate-700">{new Date(status.lastCompletedCycle.completedAt).toLocaleString()}</b></p>}
     </div>
   </Panel>
+}
+
+function StageCard({ stage, index, event, state, isIdle, timeLabel, compact, cycleActive, overrun }) {
+  const overdue = state === 'ACTIVE' && overrun > 0
+  const stateLabel = isIdle ? 'IDLE' : overdue ? 'OVERRUN' : state
+  const frameTone = isIdle || overdue ? 'border-red-200 bg-red-50' : state === 'COMPLETED' ? 'border-emerald-200 bg-emerald-50' : state === 'ACTIVE' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50'
+  const markerTone = isIdle ? 'bg-red-100 text-red-800 ring-red-200' : state === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800 ring-emerald-200' : overdue ? 'bg-red-500 text-white ring-red-200' : state === 'ACTIVE' ? 'bg-amber-400 text-amber-950 ring-amber-200' : 'bg-white text-slate-500 ring-slate-200'
+  const stateTone = isIdle || overdue ? 'text-red-700' : state === 'COMPLETED' ? 'text-emerald-700' : state === 'ACTIVE' ? 'text-amber-800' : 'text-slate-400'
+  const eventTime = event ? `${cycleActive ? '' : 'Last: '}${new Date(event.enteredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'No stage time recorded'
+
+  return <article className={`relative ${compact ? 'min-h-0 p-1.5' : 'min-h-32 p-3 sm:p-4'} rounded-lg border ${frameTone}`}>
+    <div className="flex items-center justify-between gap-2"><span className={`grid shrink-0 place-items-center rounded-full text-xs font-bold ring-2 ${compact ? 'size-5' : 'size-8 text-sm'} ${markerTone}`}>{index + 1}</span><span className={`text-[9px] font-bold tracking-widest ${stateTone}`}>{stateLabel}</span></div>
+    <h3 className={`${compact ? 'mt-0.5 text-[11px]' : 'mt-3 text-sm'} font-bold text-slate-800`}>{STAGE_LABELS[stage]}</h3>
+    <p className={`${compact ? 'text-[9px]' : 'text-[11px]'} truncate text-slate-500`}>{eventTime}</p>
+    {timeLabel && <p className="mt-0.5 text-sm font-bold tracking-tight text-slate-800">{timeLabel}</p>}
+  </article>
 }
 
 function StageDetail({ label, value, tone = 'slate', compact = false }) {
@@ -98,7 +122,7 @@ export function BayDailySummary({ completed, cyclesStarted, idleSeconds, varianc
     ['Completed cycles', `${completed}${inProgress ? ` (${inProgress} in progress)` : ''}`],
     ['Cycles started today', cyclesStarted],
     ['Idle time flagged · local', shortDuration(idleSeconds)],
-    ['Average stage variance', variance == null ? 'Learning baseline' : `${variance > 0 ? '+' : ''}${Math.round(variance)}%`],
+    ['Average stage variance', variance == null ? 'Waiting' : `${variance > 0 ? '+' : ''}${Math.round(variance)}%`],
   ]
   return <Panel compact={compact} className={compact ? 'min-h-0' : ''} title="TODAY ON THIS BAY" subtitle="Local calendar day · tracked in this browser">
     <dl className={`divide-y divide-slate-100 ${compact ? 'px-3' : 'px-5 py-1'}`}>{rows.map(([label, value], index) => <div key={label} className={`flex items-center justify-between gap-4 text-xs ${compact ? 'min-h-9 py-1' : 'min-h-11 py-2'}`}>

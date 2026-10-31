@@ -30,16 +30,16 @@ export default function LiveFloorPage() {
     ? `${idleTracking.stateStartIsObserved ? 'Tracked since' : 'Since'} ${new Date(idleTracking.stateStartedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
     : operating.known ? 'State tracking started' : 'No status received'
 
-  return <div className="mx-auto grid min-h-full w-full max-w-none grid-cols-1 content-start gap-2 xl:h-full xl:min-h-0 xl:grid-cols-2 xl:grid-rows-[auto_auto_minmax(0,1fr)_auto]">
+  return <div className="mx-auto grid min-h-full w-full max-w-none grid-cols-1 content-start gap-2 xl:h-full xl:min-h-0 xl:grid-cols-2 xl:grid-rows-[auto_auto_auto_auto]">
     <div className="flex flex-wrap items-end justify-between gap-2 xl:col-span-2">
-      <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">FLOOR SUPERVISOR</p><h2 className="mt-1 text-lg font-bold tracking-tight text-slate-900">Supervisor — live floor view</h2><p className="mt-0.5 text-xs text-slate-500">Operational detail for one bay · the level a supervisor acts on.</p></div>
+      <div><h2 className="text-lg font-bold tracking-tight text-slate-900">Supervisor — live floor view</h2><p className="mt-0.5 text-xs text-slate-500">Operational detail for one bay · the level a supervisor acts on.</p></div>
       <span className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Bay 1 · Box folding</span>
     </div>
     <section aria-label="Bay 1 summary" className="grid grid-cols-2 gap-2 xl:col-span-2 xl:grid-cols-4">
       <SummaryCard compact label="BAY 1 STATUS" value={!operating.known ? 'Folding not started' : operating.label === 'RUNNING' ? 'Running' : 'Idle'} detail={stateTime} icon="◉" tone={operating.tone}/>
       <SummaryCard compact label="ACTIVE STAGE" value={activeStage ? `Stage ${stageIndex}` : 'Waiting for cycle'} detail={activeStage ? `Step ${stageIndex + 1} of 3` : status.awaitingReset ? 'Awaiting work-area reset' : 'No active cycle'} icon="▤" tone={activeStage ? operating.label === 'IDLE' || overrun > 0 ? 'red' : 'amber' : 'slate'}/>
-      <SummaryCard compact label="TIME IN STAGE" value={elapsed != null ? `${Math.floor(elapsed / 60)}m ${String(Math.floor(elapsed % 60)).padStart(2, '0')}s` : '—'} detail={target ? `Historical target ${shortDuration(target.seconds)} · ${target.source === 'video' ? 'this video' : 'overall'}` : activeStage ? 'Learning baseline' : 'No active stage'} icon="◷" tone={overrun > 0 ? 'red' : 'amber'}/>
-      <SummaryCard compact label="PREDICTED FINISH" value={estimate != null ? `~${shortDuration(estimate)}` : activeCycle ? 'Learning baseline' : 'Waiting for cycle'} detail={estimate != null ? `Est. ${new Date(clock.getTime() + estimate * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : activeCycle ? 'Historical stage data needed' : 'No cycle in progress'} icon="◷" tone="indigo"/>
+      <SummaryCard compact label="TIME IN STAGE" value={elapsed != null ? `${Math.floor(elapsed / 60)}m ${String(Math.floor(elapsed % 60)).padStart(2, '0')}s` : '—'} detail={target ? `Historical target ${shortDuration(target.seconds)} · ${target.source === 'video' ? 'this video' : 'overall'}` : activeStage ? 'Waiting' : 'No active stage'} icon="◷" tone={overrun > 0 ? 'red' : 'amber'}/>
+      <SummaryCard compact label="PREDICTED FINISH" value={estimate != null ? `~${shortDuration(estimate)}` : activeCycle ? 'Waiting' : 'Waiting for cycle'} detail={estimate != null ? `Est. ${new Date(clock.getTime() + estimate * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : activeCycle ? 'Waiting' : 'No cycle in progress'} icon="◷" tone="indigo"/>
     </section>
 
     <div className="min-w-0 xl:col-span-2">
